@@ -9,3 +9,4 @@ Framework that provides integrations for FreeBSD. GNUstep applications can use t
 - Battery information
 - Display Information
 - USB device detection
+- All methods should have the option to return as NSDictionary, JSON or XML
