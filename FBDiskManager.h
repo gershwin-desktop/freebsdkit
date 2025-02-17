@@ -1,7 +1,8 @@
 #import <Foundation/Foundation.h>
 
 @interface FBDiskManager : NSObject
-+ (NSArray *)getDisks;
++ (NSArray *)getDiskNames;
 + (NSMutableDictionary *)getAllDiskInfo;
++ (NSMutableDictionary *)getDiskInfo:(NSString *)diskName;
 @end
 

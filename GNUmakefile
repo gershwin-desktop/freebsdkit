@@ -10,7 +10,7 @@ FreeBSDKit_HEADER_INSTALLDIR = FreeBSDKit.framework/Headers
 FreeBSDKit_OBJC_FILES = FreeBSDKit.m FBDiskManager.m
 
 # To set install location like macOS, remove `/usr/local/GNUstep` prefix
-FreeBSDKit_INSTALLDIR = /usr/local/GNUstep/System/Library/Frameworks
+FreeBSDKit_INSTALLDIR = /System/Library/Frameworks
 
 include $(GNUSTEP_MAKEFILES)/framework.make
 

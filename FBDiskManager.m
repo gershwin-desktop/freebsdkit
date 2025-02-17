@@ -6,7 +6,7 @@
 
 @implementation FBDiskManager
 
-+ (NSArray *)getDisks {
++ (NSArray *)getDiskNames {
     size_t size;
     sysctlbyname("kern.disks", NULL, &size, NULL, 0);
 
@@ -70,5 +70,21 @@
 
     return disksDictionary;
 }
+
++ (NSMutableDictionary *)getDiskInfo:(NSString *)diskName {
+    NSDictionary *allDisks = [self getAllDiskInfo];
+    if (!allDisks) {
+        return nil; // Handle case where no disk info is available
+    }
+
+    NSDictionary *diskInfo = allDisks[diskName];
+    if (diskInfo) {
+        return [diskInfo mutableCopy];
+    } else {
+        NSLog(@"Disk %@ not found", diskName);
+        return nil;
+    }
+}
+
 @end
 
