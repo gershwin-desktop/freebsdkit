@@ -4,9 +4,8 @@ Framework that provides integrations for FreeBSD. GNUstep applications can use t
 
 ### TODO
 
-- Disk Information via ZFS, CamControl and Geom etc.
-- ZFS Information and actions like snapshots/rollback/clone and send/rcv
-- Battery information
-- Display Information
-- USB device detection
-- All methods should have the option to return as NSDictionary, JSON or XML
+- FBDiskManager 50%
+- FBFileManager 0%
+- FBBatteryManager 0%
+- FBDisplayManager (for screens) 0%
+- FBNetworkManager 0%
