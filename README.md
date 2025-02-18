@@ -7,7 +7,7 @@ Framework that provides integrations for FreeBSD. GNUstep applications can use t
 - FBDiskManager 50%
 - FBWifiManager 0%
 - FBFileManager 0%
-- FBBatteryManager 0%
+- FBPowerManager 0%
 - FBDisplayManager (for screens) 0%
 - FBSoundManager 0%
 
