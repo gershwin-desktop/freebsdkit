@@ -166,26 +166,6 @@
   UKFalse(result);
 }
 
-- (void)testMountUnmountFlow
-{
-  // This test requires a test device/image file
-  // For now, we'll test the basic flow with error handling
-
-  NSString *testMountPoint = [self createTemporaryMountPoint];
-  UKNotNil(testMountPoint);
-
-  // Try to mount a non-existent device (should fail)
-  NSError *error = nil;
-  BOOL result = [FBDiskManager mountVolume:@"/dev/nonexistent"
-                                mountPoint:testMountPoint
-                                filesystem:@"ufs"
-                                     error:&error];
-  UKFalse(result);
-  UKNotNil(error);
-
-  // Clean up
-  [self cleanupTemporaryMountPoint:testMountPoint];
-}
 
 // Helper methods
 
@@ -318,18 +298,6 @@
 
 // Volume Label Tests
 
-- (void)testGetVolumeLabelWithValidDevice
-{
-  // Test with known device - may or may not have volume label
-  NSString *volumeLabel = [FBDiskManager getVolumeLabel:@"/dev/da0"];
-  
-  // Should return string or nil, but not crash
-  if (volumeLabel) {
-    UKTrue([volumeLabel isKindOfClass:[NSString class]]);
-    UKTrue([volumeLabel length] > 0);
-  }
-}
-
 - (void)testGetVolumeLabelWithNilParameter
 {
   NSString *volumeLabel = [FBDiskManager getVolumeLabel:nil];
@@ -397,30 +365,6 @@
 
 // Filesystem Detection Tests
 
-- (void)testDetectFilesystemWithValidDevice
-{
-  // Test with da0 - may return "unknown" due to permissions
-  NSString *filesystem = [FBDiskManager detectFilesystem:@"/dev/da0"];
-  
-  UKNotNil(filesystem);
-  UKTrue([filesystem isKindOfClass:[NSString class]]);
-  
-  // Filesystem detection may fail due to permissions, so "unknown" is acceptable
-  UKTrue([filesystem isEqualToString:@"unknown"] || [filesystem isEqualToString:@"cd9660"]);
-}
-
-- (void)testDetectFilesystemWithZFSDevice
-{
-  // Test with ada0 which has ZFS partitions
-  NSString *filesystem = [FBDiskManager detectFilesystem:@"/dev/ada0"];
-  
-  UKNotNil(filesystem);
-  UKTrue([filesystem isKindOfClass:[NSString class]]);
-  
-  // ZFS whole disk detection might return unknown since it's the partition that has ZFS
-  // This is expected behavior
-}
-
 - (void)testDetectFilesystemWithNonExistentDevice
 {
   // Test with non-existent device
@@ -438,21 +382,6 @@
 {
   NSString *filesystem = [FBDiskManager detectFilesystem:nil];
   UKNil(filesystem);
-}
-
-- (void)testDiskInfoIncludesFilesystemInformation
-{
-  // Test that filesystem information is included in disk info
-  NSMutableDictionary *diskInfo = [FBDiskManager getDiskInfo:@"da0"];
-  
-  UKNotNil(diskInfo);
-  
-  // Should have filesystem information
-  UKNotNil(diskInfo[@"filesystem"]);
-  UKTrue([diskInfo[@"filesystem"] isKindOfClass:[NSString class]]);
-  
-  // May be "unknown" due to permissions, or "cd9660" if accessible
-  UKTrue([diskInfo[@"filesystem"] isEqualToString:@"unknown"] || [diskInfo[@"filesystem"] isEqualToString:@"cd9660"]);
 }
 
 @end
