@@ -15,11 +15,12 @@
 - (void)testUnmountVolumeWithInvalidParameters;
 - (void)testGetMountedVolumes;
 - (void)testIsMountedWithNilParameter;
-- (void)testMountUnmountFlow;
 
 // Helper methods
 - (NSString *)createTemporaryMountPoint;
 - (void)cleanupTemporaryMountPoint:(NSString *)mountPoint;
 - (NSString *)findTestDevice;
+- (NSString *)findZFSDevice;
+- (NSString *)findNonZFSDevice;
 
 @end

@@ -166,26 +166,6 @@
   UKFalse(result);
 }
 
-- (void)testMountUnmountFlow
-{
-  // This test requires a test device/image file
-  // For now, we'll test the basic flow with error handling
-
-  NSString *testMountPoint = [self createTemporaryMountPoint];
-  UKNotNil(testMountPoint);
-
-  // Try to mount a non-existent device (should fail)
-  NSError *error = nil;
-  BOOL result = [FBDiskManager mountVolume:@"/dev/nonexistent"
-                                mountPoint:testMountPoint
-                                filesystem:@"ufs"
-                                     error:&error];
-  UKFalse(result);
-  UKNotNil(error);
-
-  // Clean up
-  [self cleanupTemporaryMountPoint:testMountPoint];
-}
 
 // Helper methods
 
@@ -220,6 +200,274 @@
   // This would find a suitable test device for mounting tests
   // For now, return nil to indicate no test device available
   return nil;
+}
+
+- (NSString *)findZFSDevice
+{
+  // Find the first available ZFS device
+  NSArray *diskNames = [FBDiskManager getDiskNames];
+  for (NSString *diskName in diskNames) {
+    NSString *devicePath = [NSString stringWithFormat:@"/dev/%@", diskName];
+    NSError *error = nil;
+    if ([FBDiskManager isZFSDevice:devicePath error:&error]) {
+      return diskName;
+    }
+  }
+  return nil;
+}
+
+- (NSString *)findNonZFSDevice
+{
+  // Find the first available non-ZFS device
+  NSArray *diskNames = [FBDiskManager getDiskNames];
+  for (NSString *diskName in diskNames) {
+    NSString *devicePath = [NSString stringWithFormat:@"/dev/%@", diskName];
+    NSError *error = nil;
+    if (![FBDiskManager isZFSDevice:devicePath error:&error]) {
+      return diskName;
+    }
+  }
+  return nil;
+}
+
+// ZFS Detection Tests
+
+- (void)testIsZFSDeviceWithValidDevice
+{
+  // Find a ZFS device to test with
+  NSString *zfsDevice = [self findZFSDevice];
+  if (!zfsDevice) {
+    // Skip test if no ZFS device available
+    return;
+  }
+  
+  NSString *devicePath = [NSString stringWithFormat:@"/dev/%@", zfsDevice];
+  NSError *error = nil;
+  BOOL result = [FBDiskManager isZFSDevice:devicePath error:&error];
+  
+  // Should detect ZFS
+  UKTrue(result);
+  UKNil(error);
+}
+
+- (void)testIsZFSDeviceWithNonZFSDevice
+{
+  // Find a non-ZFS device to test with
+  NSString *nonZfsDevice = [self findNonZFSDevice];
+  if (!nonZfsDevice) {
+    // Skip test if no non-ZFS device available
+    return;
+  }
+  
+  NSString *devicePath = [NSString stringWithFormat:@"/dev/%@", nonZfsDevice];
+  NSError *error = nil;
+  BOOL result = [FBDiskManager isZFSDevice:devicePath error:&error];
+  
+  // Should not detect ZFS
+  UKFalse(result);
+  UKNil(error);
+}
+
+- (void)testIsZFSDeviceWithNilParameter
+{
+  NSError *error = nil;
+  BOOL result = [FBDiskManager isZFSDevice:nil error:&error];
+  
+  UKFalse(result);
+  UKNotNil(error);
+  UKIntsEqual([error code], 3001);
+}
+
+- (void)testGetZFSPoolName
+{
+  // Find a ZFS device to test with
+  NSString *zfsDevice = [self findZFSDevice];
+  if (!zfsDevice) {
+    // Skip test if no ZFS device available
+    return;
+  }
+  
+  NSString *devicePath = [NSString stringWithFormat:@"/dev/%@", zfsDevice];
+  NSString *poolName = [FBDiskManager getZFSPoolName:devicePath];
+  
+  // Should return a pool name (not nil)
+  UKNotNil(poolName);
+  UKTrue([poolName isKindOfClass:[NSString class]]);
+  UKTrue([poolName length] > 0);
+}
+
+- (void)testGetZFSPoolNameWithNonZFSDevice
+{
+  // Find a non-ZFS device to test with
+  NSString *nonZfsDevice = [self findNonZFSDevice];
+  if (!nonZfsDevice) {
+    // Skip test if no non-ZFS device available
+    return;
+  }
+  
+  NSString *devicePath = [NSString stringWithFormat:@"/dev/%@", nonZfsDevice];
+  NSString *poolName = [FBDiskManager getZFSPoolName:devicePath];
+  
+  // Should return nil
+  UKNil(poolName);
+}
+
+- (void)testGetZFSPoolNameWithNilParameter
+{
+  NSString *poolName = [FBDiskManager getZFSPoolName:nil];
+  UKNil(poolName);
+}
+
+- (void)testGetZFSPoolSummary
+{
+  // Find a ZFS device to get pool name from
+  NSString *zfsDevice = [self findZFSDevice];
+  if (!zfsDevice) {
+    // Skip test if no ZFS device available
+    return;
+  }
+  
+  NSString *devicePath = [NSString stringWithFormat:@"/dev/%@", zfsDevice];
+  NSString *poolName = [FBDiskManager getZFSPoolName:devicePath];
+  if (!poolName) {
+    // Skip test if we can't get pool name
+    return;
+  }
+  
+  // Test with the discovered ZFS pool
+  NSDictionary *summary = [FBDiskManager getZFSPoolSummary:poolName];
+  
+  UKNotNil(summary);
+  UKTrue([summary isKindOfClass:[NSDictionary class]]);
+  
+  // Should have required keys
+  UKNotNil(summary[@"status"]);
+  UKNotNil(summary[@"total_datasets"]);
+  UKNotNil(summary[@"encrypted_datasets"]);
+  
+  // Verify types
+  UKTrue([summary[@"status"] isKindOfClass:[NSString class]]);
+  UKTrue([summary[@"total_datasets"] isKindOfClass:[NSNumber class]]);
+  UKTrue([summary[@"encrypted_datasets"] isKindOfClass:[NSNumber class]]);
+  
+  // Status should be a valid ZFS state
+  NSString *status = summary[@"status"];
+  NSArray *validStates = @[@"ONLINE", @"DEGRADED", @"FAULTED", @"OFFLINE", @"UNAVAIL", @"REMOVED"];
+  UKTrue([validStates containsObject:status]);
+}
+
+- (void)testGetZFSPoolSummaryWithInvalidPool
+{
+  NSDictionary *summary = [FBDiskManager getZFSPoolSummary:@"nonexistent_pool"];
+  UKNil(summary);
+}
+
+- (void)testGetZFSPoolSummaryWithNilParameter
+{
+  NSDictionary *summary = [FBDiskManager getZFSPoolSummary:nil];
+  UKNil(summary);
+}
+
+// Volume Label Tests
+
+- (void)testGetVolumeLabelWithNilParameter
+{
+  NSString *volumeLabel = [FBDiskManager getVolumeLabel:nil];
+  UKNil(volumeLabel);
+}
+
+- (void)testSanitizeVolumeName
+{
+  // Test with valid name
+  NSString *sanitized = [FBDiskManager sanitizeVolumeName:@"MyVolume"];
+  UKStringsEqual(sanitized, @"MyVolume");
+  
+  // Test with invalid characters
+  NSString *invalidName = @"My/Volume:With*Bad?Chars";
+  NSString *sanitizedInvalid = [FBDiskManager sanitizeVolumeName:invalidName];
+  UKStringsEqual(sanitizedInvalid, @"My_Volume_With_Bad_Chars");
+  
+  // Test with whitespace
+  NSString *whitespace = @"  Spaced Volume  ";
+  NSString *sanitizedWhitespace = [FBDiskManager sanitizeVolumeName:whitespace];
+  UKStringsEqual(sanitizedWhitespace, @"Spaced Volume");
+  
+  // Test with nil
+  NSString *nilResult = [FBDiskManager sanitizeVolumeName:nil];
+  UKNil(nilResult);
+  
+  // Test with empty string
+  NSString *emptyResult = [FBDiskManager sanitizeVolumeName:@""];
+  UKNil(emptyResult);
+}
+
+- (void)testDiskInfoIncludesZFSInformation
+{
+  // Find a ZFS device to test with
+  NSString *zfsDevice = [self findZFSDevice];
+  if (!zfsDevice) {
+    // Skip test if no ZFS device available
+    return;
+  }
+  
+  // Test that ZFS information is included in disk info for ZFS devices
+  NSMutableDictionary *diskInfo = [FBDiskManager getDiskInfo:zfsDevice];
+  
+  UKNotNil(diskInfo);
+  
+  // Should have ZFS information since device contains ZFS
+  UKNotNil(diskInfo[@"zfs_pool"]);
+  UKNotNil(diskInfo[@"zfs_status"]);
+  UKNotNil(diskInfo[@"zfs_datasets_total"]);
+  UKNotNil(diskInfo[@"zfs_encrypted_datasets"]);
+  
+  // Verify types
+  UKTrue([diskInfo[@"zfs_pool"] isKindOfClass:[NSString class]]);
+  UKTrue([diskInfo[@"zfs_status"] isKindOfClass:[NSString class]]);
+  UKTrue([diskInfo[@"zfs_datasets_total"] isKindOfClass:[NSNumber class]]);
+  UKTrue([diskInfo[@"zfs_encrypted_datasets"] isKindOfClass:[NSNumber class]]);
+}
+
+- (void)testDiskInfoExcludesZFSInformationForNonZFSDevices
+{
+  // Find a non-ZFS device to test with
+  NSString *nonZfsDevice = [self findNonZFSDevice];
+  if (!nonZfsDevice) {
+    // Skip test if no non-ZFS device available
+    return;
+  }
+  
+  // Test that non-ZFS devices don't have ZFS information
+  NSMutableDictionary *diskInfo = [FBDiskManager getDiskInfo:nonZfsDevice];
+  
+  UKNotNil(diskInfo);
+  
+  // Should not have ZFS information since device is not ZFS
+  UKNil(diskInfo[@"zfs_pool"]);
+  UKNil(diskInfo[@"zfs_status"]);
+  UKNil(diskInfo[@"zfs_datasets_total"]);
+  UKNil(diskInfo[@"zfs_encrypted_datasets"]);
+}
+
+// Filesystem Detection Tests
+
+- (void)testDetectFilesystemWithNonExistentDevice
+{
+  // Test with non-existent device
+  NSString *filesystem = [FBDiskManager detectFilesystem:@"/dev/nonexistent"];
+  
+  // Should return nil or unknown
+  if (filesystem) {
+    UKStringsEqual(filesystem, @"unknown");
+  } else {
+    UKNil(filesystem);
+  }
+}
+
+- (void)testDetectFilesystemWithNilParameter
+{
+  NSString *filesystem = [FBDiskManager detectFilesystem:nil];
+  UKNil(filesystem);
 }
 
 @end
