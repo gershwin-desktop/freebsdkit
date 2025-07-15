@@ -20,5 +20,7 @@
 - (NSString *)createTemporaryMountPoint;
 - (void)cleanupTemporaryMountPoint:(NSString *)mountPoint;
 - (NSString *)findTestDevice;
+- (NSString *)findZFSDevice;
+- (NSString *)findNonZFSDevice;
 
 @end
