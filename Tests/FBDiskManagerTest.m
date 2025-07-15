@@ -222,4 +222,177 @@
   return nil;
 }
 
+// ZFS Detection Tests
+
+- (void)testIsZFSDeviceWithValidDevice
+{
+  // Test with known ZFS device (ada0 has ZFS pool zroot)
+  NSError *error = nil;
+  BOOL result = [FBDiskManager isZFSDevice:@"/dev/ada0" error:&error];
+  
+  // Should detect ZFS since ada0p4 is in zroot pool
+  UKTrue(result);
+  UKNil(error);
+}
+
+- (void)testIsZFSDeviceWithNonZFSDevice
+{
+  // Test with known non-ZFS device (da0 is cd9660 ISO)
+  NSError *error = nil;
+  BOOL result = [FBDiskManager isZFSDevice:@"/dev/da0" error:&error];
+  
+  // Should not detect ZFS
+  UKFalse(result);
+  UKNil(error);
+}
+
+- (void)testIsZFSDeviceWithNilParameter
+{
+  NSError *error = nil;
+  BOOL result = [FBDiskManager isZFSDevice:nil error:&error];
+  
+  UKFalse(result);
+  UKNotNil(error);
+  UKIntsEqual([error code], 3001);
+}
+
+- (void)testGetZFSPoolName
+{
+  // Test with known ZFS device
+  NSString *poolName = [FBDiskManager getZFSPoolName:@"/dev/ada0"];
+  
+  // Should return "zroot" pool name
+  UKStringsEqual(poolName, @"zroot");
+}
+
+- (void)testGetZFSPoolNameWithNonZFSDevice
+{
+  // Test with non-ZFS device
+  NSString *poolName = [FBDiskManager getZFSPoolName:@"/dev/da0"];
+  
+  // Should return nil
+  UKNil(poolName);
+}
+
+- (void)testGetZFSPoolNameWithNilParameter
+{
+  NSString *poolName = [FBDiskManager getZFSPoolName:nil];
+  UKNil(poolName);
+}
+
+- (void)testGetZFSPoolSummary
+{
+  // Test with known ZFS pool
+  NSDictionary *summary = [FBDiskManager getZFSPoolSummary:@"zroot"];
+  
+  UKNotNil(summary);
+  UKTrue([summary isKindOfClass:[NSDictionary class]]);
+  
+  // Should have required keys
+  UKNotNil(summary[@"status"]);
+  UKNotNil(summary[@"total_datasets"]);
+  UKNotNil(summary[@"encrypted_datasets"]);
+  
+  // Verify types
+  UKTrue([summary[@"status"] isKindOfClass:[NSString class]]);
+  UKTrue([summary[@"total_datasets"] isKindOfClass:[NSNumber class]]);
+  UKTrue([summary[@"encrypted_datasets"] isKindOfClass:[NSNumber class]]);
+  
+  // Status should be a valid ZFS state
+  NSString *status = summary[@"status"];
+  NSArray *validStates = @[@"ONLINE", @"DEGRADED", @"FAULTED", @"OFFLINE", @"UNAVAIL", @"REMOVED"];
+  UKTrue([validStates containsObject:status]);
+}
+
+- (void)testGetZFSPoolSummaryWithInvalidPool
+{
+  NSDictionary *summary = [FBDiskManager getZFSPoolSummary:@"nonexistent_pool"];
+  UKNil(summary);
+}
+
+- (void)testGetZFSPoolSummaryWithNilParameter
+{
+  NSDictionary *summary = [FBDiskManager getZFSPoolSummary:nil];
+  UKNil(summary);
+}
+
+// Volume Label Tests
+
+- (void)testGetVolumeLabelWithValidDevice
+{
+  // Test with known device - may or may not have volume label
+  NSString *volumeLabel = [FBDiskManager getVolumeLabel:@"/dev/da0"];
+  
+  // Should return string or nil, but not crash
+  if (volumeLabel) {
+    UKTrue([volumeLabel isKindOfClass:[NSString class]]);
+    UKTrue([volumeLabel length] > 0);
+  }
+}
+
+- (void)testGetVolumeLabelWithNilParameter
+{
+  NSString *volumeLabel = [FBDiskManager getVolumeLabel:nil];
+  UKNil(volumeLabel);
+}
+
+- (void)testSanitizeVolumeName
+{
+  // Test with valid name
+  NSString *sanitized = [FBDiskManager sanitizeVolumeName:@"MyVolume"];
+  UKStringsEqual(sanitized, @"MyVolume");
+  
+  // Test with invalid characters
+  NSString *invalidName = @"My/Volume:With*Bad?Chars";
+  NSString *sanitizedInvalid = [FBDiskManager sanitizeVolumeName:invalidName];
+  UKStringsEqual(sanitizedInvalid, @"My_Volume_With_Bad_Chars");
+  
+  // Test with whitespace
+  NSString *whitespace = @"  Spaced Volume  ";
+  NSString *sanitizedWhitespace = [FBDiskManager sanitizeVolumeName:whitespace];
+  UKStringsEqual(sanitizedWhitespace, @"Spaced Volume");
+  
+  // Test with nil
+  NSString *nilResult = [FBDiskManager sanitizeVolumeName:nil];
+  UKNil(nilResult);
+  
+  // Test with empty string
+  NSString *emptyResult = [FBDiskManager sanitizeVolumeName:@""];
+  UKNil(emptyResult);
+}
+
+- (void)testDiskInfoIncludesZFSInformation
+{
+  // Test that ZFS information is included in disk info for ZFS devices
+  NSMutableDictionary *diskInfo = [FBDiskManager getDiskInfo:@"ada0"];
+  
+  UKNotNil(diskInfo);
+  
+  // Should have ZFS information since ada0 contains ZFS
+  UKNotNil(diskInfo[@"zfs_pool"]);
+  UKNotNil(diskInfo[@"zfs_status"]);
+  UKNotNil(diskInfo[@"zfs_datasets_total"]);
+  UKNotNil(diskInfo[@"zfs_encrypted_datasets"]);
+  
+  // Verify values
+  UKStringsEqual(diskInfo[@"zfs_pool"], @"zroot");
+  UKTrue([diskInfo[@"zfs_status"] isKindOfClass:[NSString class]]);
+  UKTrue([diskInfo[@"zfs_datasets_total"] isKindOfClass:[NSNumber class]]);
+  UKTrue([diskInfo[@"zfs_encrypted_datasets"] isKindOfClass:[NSNumber class]]);
+}
+
+- (void)testDiskInfoExcludesZFSInformationForNonZFSDevices
+{
+  // Test that non-ZFS devices don't have ZFS information
+  NSMutableDictionary *diskInfo = [FBDiskManager getDiskInfo:@"da0"];
+  
+  UKNotNil(diskInfo);
+  
+  // Should not have ZFS information since da0 is not ZFS
+  UKNil(diskInfo[@"zfs_pool"]);
+  UKNil(diskInfo[@"zfs_status"]);
+  UKNil(diskInfo[@"zfs_datasets_total"]);
+  UKNil(diskInfo[@"zfs_encrypted_datasets"]);
+}
+
 @end

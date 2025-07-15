@@ -17,4 +17,12 @@
 // ZFS detection methods
 + (BOOL)isZFSDevice:(NSString *)devicePath error:(NSError **)error;
 + (NSString *)detectFilesystem:(NSString *)devicePath;
+
+// Volume name detection methods
++ (NSString *)getVolumeLabel:(NSString *)devicePath;
++ (NSString *)sanitizeVolumeName:(NSString *)volumeName;
+
+// ZFS pool information methods
++ (NSString *)getZFSPoolName:(NSString *)devicePath;
++ (NSDictionary *)getZFSPoolSummary:(NSString *)poolName;
 @end
