@@ -14,3 +14,13 @@ FreeBSDKit_INSTALLDIR = /System/Library/Frameworks
 
 include $(GNUSTEP_MAKEFILES)/framework.make
 
+# Test target
+test:
+	cd Tests && gmake test
+
+# Clean test artifacts
+clean-test:
+	cd Tests && gmake clean-test
+
+.PHONY: test clean-test
+
