@@ -85,6 +85,15 @@
         
         NSString *descr = descrCStr ? [NSString stringWithUTF8String:descrCStr] : @"";
 
+        // Detect filesystem for this disk
+        NSString *filesystem = [self detectFilesystem:diskPath];
+        
+        // Check if it's a ZFS device and override filesystem if needed
+        NSError *zfsError = nil;
+        if ([self isZFSDevice:diskPath error:&zfsError]) {
+          filesystem = @"zfs";
+        }
+        
         // Store disk attributes in dictionary
         NSDictionary *diskInfo = @{
           @"name" : diskName,
@@ -94,7 +103,8 @@
           @"stripe_size" : @(providerPtr->lg_stripesize),
           @"stripe_offset" : @(providerPtr->lg_stripeoffset),
           @"mode" : @(providerPtr->lg_mode),
-          @"description" : descr
+          @"description" : descr,
+          @"filesystem" : filesystem ?: @"unknown"
         };
 
         // Add entry with disk name as the key
