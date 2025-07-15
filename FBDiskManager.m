@@ -120,10 +120,16 @@
   if (diskInfo) {
     NSMutableDictionary *mutableDiskInfo = [diskInfo mutableCopy];
     
-    // Add ZFS information if device is ZFS
+    // Add filesystem information
     NSString *devicePath = diskInfo[@"path"];
+    NSString *filesystem = [self detectFilesystem:devicePath];
+    
+    // Add ZFS information if device is ZFS
     NSError *zfsError = nil;
     if ([self isZFSDevice:devicePath error:&zfsError]) {
+      // If we detect ZFS, override filesystem to "zfs"
+      filesystem = @"zfs";
+      
       NSString *poolName = [self getZFSPoolName:devicePath];
       if (poolName) {
         mutableDiskInfo[@"zfs_pool"] = poolName;
@@ -135,6 +141,11 @@
           mutableDiskInfo[@"zfs_encrypted_datasets"] = poolSummary[@"encrypted_datasets"] ?: @(0);
         }
       }
+    }
+    
+    // Set filesystem information
+    if (filesystem) {
+      mutableDiskInfo[@"filesystem"] = filesystem;
     }
     
     return mutableDiskInfo;
@@ -442,8 +453,17 @@
     return nil;
   }
 
-  // First try fstyp for more accurate FreeBSD detection
-  NSString *fstypCommand = [NSString stringWithFormat:@"fstyp %@", devicePath];
+  // First, check if the device is already mounted and get filesystem from mount table
+  NSArray *mountedVolumes = [self getMountedVolumes];
+  for (NSDictionary *mount in mountedVolumes) {
+    NSString *mountedDevice = mount[@"device"];
+    if ([mountedDevice isEqualToString:devicePath]) {
+      return mount[@"filesystem"];
+    }
+  }
+
+  // Try fstyp for more accurate FreeBSD detection (may fail without root)
+  NSString *fstypCommand = [NSString stringWithFormat:@"fstyp %@ 2>/dev/null", devicePath];
   FILE *pipe = popen([fstypCommand UTF8String], "r");
   if (pipe) {
     char buffer[256];
@@ -458,35 +478,37 @@
     }
   }
 
-  // Fallback to file command for broader detection
-  NSString *fileCommand = [NSString stringWithFormat:@"file -s %@", devicePath];
+  // Fallback to file command for broader detection (may also fail without root)
+  NSString *fileCommand = [NSString stringWithFormat:@"file -s %@ 2>/dev/null", devicePath];
   pipe = popen([fileCommand UTF8String], "r");
-  if (!pipe) {
-    return nil;
-  }
-
-  char buffer[512];
-  NSString *result = nil;
-  if (fgets(buffer, sizeof(buffer), pipe)) {
-    NSString *output = [NSString stringWithUTF8String:buffer];
-    
-    if ([output containsString:@"Unix Fast File system"]) {
-      result = @"ufs";
-    } else if ([output containsString:@"DOS/MBR boot sector"] || [output containsString:@"FAT"]) {
-      result = @"msdosfs";
-    } else if ([output containsString:@"ext2"] || [output containsString:@"ext3"] || [output containsString:@"ext4"]) {
-      result = @"ext2fs";
-    } else if ([output containsString:@"NTFS"]) {
-      result = @"ntfs";
-    } else if ([output containsString:@"ISO 9660"] || [output containsString:@"CD-ROM"]) {
-      result = @"cd9660";
-    } else {
-      result = @"unknown";
+  if (pipe) {
+    char buffer[512];
+    NSString *result = nil;
+    if (fgets(buffer, sizeof(buffer), pipe)) {
+      NSString *output = [NSString stringWithUTF8String:buffer];
+      
+      if ([output containsString:@"Unix Fast File system"]) {
+        result = @"ufs";
+      } else if ([output containsString:@"DOS/MBR boot sector"] || [output containsString:@"FAT"]) {
+        result = @"msdosfs";
+      } else if ([output containsString:@"ext2"] || [output containsString:@"ext3"] || [output containsString:@"ext4"]) {
+        result = @"ext2fs";
+      } else if ([output containsString:@"NTFS"]) {
+        result = @"ntfs";
+      } else if ([output containsString:@"ISO 9660"] || [output containsString:@"CD-ROM"]) {
+        result = @"cd9660";
+      } else {
+        result = @"unknown";
+      }
+    }
+    pclose(pipe);
+    if (result && ![result isEqualToString:@"unknown"]) {
+      return result;
     }
   }
   
-  pclose(pipe);
-  return result;
+  // If all else fails, return unknown
+  return @"unknown";
 }
 
 + (NSString *)getVolumeLabel:(NSString *)devicePath
