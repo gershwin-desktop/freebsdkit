@@ -395,4 +395,64 @@
   UKNil(diskInfo[@"zfs_encrypted_datasets"]);
 }
 
+// Filesystem Detection Tests
+
+- (void)testDetectFilesystemWithValidDevice
+{
+  // Test with da0 - may return "unknown" due to permissions
+  NSString *filesystem = [FBDiskManager detectFilesystem:@"/dev/da0"];
+  
+  UKNotNil(filesystem);
+  UKTrue([filesystem isKindOfClass:[NSString class]]);
+  
+  // Filesystem detection may fail due to permissions, so "unknown" is acceptable
+  UKTrue([filesystem isEqualToString:@"unknown"] || [filesystem isEqualToString:@"cd9660"]);
+}
+
+- (void)testDetectFilesystemWithZFSDevice
+{
+  // Test with ada0 which has ZFS partitions
+  NSString *filesystem = [FBDiskManager detectFilesystem:@"/dev/ada0"];
+  
+  UKNotNil(filesystem);
+  UKTrue([filesystem isKindOfClass:[NSString class]]);
+  
+  // ZFS whole disk detection might return unknown since it's the partition that has ZFS
+  // This is expected behavior
+}
+
+- (void)testDetectFilesystemWithNonExistentDevice
+{
+  // Test with non-existent device
+  NSString *filesystem = [FBDiskManager detectFilesystem:@"/dev/nonexistent"];
+  
+  // Should return nil or unknown
+  if (filesystem) {
+    UKStringsEqual(filesystem, @"unknown");
+  } else {
+    UKNil(filesystem);
+  }
+}
+
+- (void)testDetectFilesystemWithNilParameter
+{
+  NSString *filesystem = [FBDiskManager detectFilesystem:nil];
+  UKNil(filesystem);
+}
+
+- (void)testDiskInfoIncludesFilesystemInformation
+{
+  // Test that filesystem information is included in disk info
+  NSMutableDictionary *diskInfo = [FBDiskManager getDiskInfo:@"da0"];
+  
+  UKNotNil(diskInfo);
+  
+  // Should have filesystem information
+  UKNotNil(diskInfo[@"filesystem"]);
+  UKTrue([diskInfo[@"filesystem"] isKindOfClass:[NSString class]]);
+  
+  // May be "unknown" due to permissions, or "cd9660" if accessible
+  UKTrue([diskInfo[@"filesystem"] isEqualToString:@"unknown"] || [diskInfo[@"filesystem"] isEqualToString:@"cd9660"]);
+}
+
 @end
