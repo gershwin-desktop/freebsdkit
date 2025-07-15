@@ -334,6 +334,22 @@
     return NO;
   }
 
+  // Clean up the mount point directory if it's in /Volumes/
+  if ([mountPoint hasPrefix:@"/Volumes/"]) {
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    NSError *removeError = nil;
+    
+    // Only remove if the directory is empty
+    NSArray *contents = [fileManager contentsOfDirectoryAtPath:mountPoint error:nil];
+    if (contents && [contents count] == 0) {
+      if (![fileManager removeItemAtPath:mountPoint error:&removeError]) {
+        NSLog(@"Warning: Failed to remove empty mount point directory %@: %@", 
+              mountPoint, [removeError localizedDescription]);
+        // Don't fail the unmount operation just because we couldn't clean up the directory
+      }
+    }
+  }
+
   return YES;
 }
 
